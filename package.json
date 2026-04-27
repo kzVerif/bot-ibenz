@@ -1,0 +1,14 @@
+{
+  "name": "rakjangshop",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@zxing/library": "^0.21.3",
+    "discord.js": "^14.26.3",
+    "dotenv": "^17.4.2",
+    "impit": "^0.13.1",
+    "jimp": "^1.6.1",
+    "jsqr": "^1.4.0",
+    "sharp": "^0.34.5"
+  }
+}
