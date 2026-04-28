@@ -74,7 +74,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.commandName === "qr") {
     const member = interaction.member;
     if (!member.roles.cache.has(process.env.ADMIN_ROLE_ID)) {
-      await interaction.reply({ content: "คุณไม่มีสิทธิ์ในการใช้คำสั่งนี้", ephemeral: true });
+      await interaction.reply({
+        content: "คุณไม่มีสิทธิ์ในการใช้คำสั่งนี้",
+        ephemeral: true,
+      });
       return;
     }
     // 1. ดึงค่า Parameters
@@ -117,17 +120,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
 client.on(Events.MessageCreate, async (message) => {
   // 1. ป้องกันบอทตอบกันเอง
   if (message.author.bot) return;
-  
+
   // 2. เช็คว่าอยู่ในห้องที่ขึ้นต้นด้วย "ticket" หรือไม่
   if (message.channel.name?.startsWith("ticket")) {
-    
     // 3. เช็คว่ามีการแนบไฟล์มาหรือไม่ (.size > 0)
     if (message.attachments.size > 0) {
-      
       // 4. ตรวจสอบว่าไฟล์ที่ส่งมามีไฟล์ไหนที่เป็นรูปภาพบ้าง
       // เราจะใช้ .some เพื่อดูว่ามีไฟล์ที่มี contentType เป็น image หรือไม่
-      const hasImage = message.attachments.some(attachment => 
-        attachment.contentType?.startsWith("image/")
+      const hasImage = message.attachments.some((attachment) =>
+        attachment.contentType?.startsWith("image/"),
       );
 
       if (hasImage) {
@@ -138,39 +139,58 @@ client.on(Events.MessageCreate, async (message) => {
         const blob = new Blob([arrayBuffer], { type: attachment.contentType });
         const payload = await decodeSlipQRCode(blob); // สมมติว่าเราจะอ่าน QR จากรูปแรกที่ส่งมา
         const rdcw = await checkSlipRdcw(payload);
-
-        if (rdcw.code > 200) {
-          await message.reply("เช็คสลิปไม่สำเร็จ 🙏");
+        const slipResult = checkAndSaveSlip(rdcw.data.transRef);
+        if (!slipResult.success) {
+          // ดำเนินการต่อหากสลิปใหม่
+          await message.reply(slipResult.message);
           return;
         }
-        await sendLogBankEmbed(client, {
-          authorId: message.author.id,
-          channelId: message.channel.id,
-          channelName: message.channel.name,
-          authorTag: message.author.tag,// กำหนดเป็นจำนวนเงินสูงๆ เพื่อให้เห็นใน log ว่ามีการรับซองไม่สำเร็จ
-          slipUrl: message.attachments.first().url, // ส่ง URL ของรูปสลิปไปด้วยใน log
-        },rdcw.data);
 
-        await message.reply("ได้รับรูปภาพแล้วครับ! กรุณารอแอดมินตรวจสอบสักครู่ 🙏");
+        if (rdcw.code > 200) {
+          // await message.reply("เช็คสลิปไม่สำเร็จ 🙏");
+          return;
+        }
+        await sendLogBankEmbed(
+          client,
+          {
+            authorId: message.author.id,
+            channelId: message.channel.id,
+            channelName: message.channel.name,
+            authorTag: message.author.tag, // กำหนดเป็นจำนวนเงินสูงๆ เพื่อให้เห็นใน log ว่ามีการรับซองไม่สำเร็จ
+            slipUrl: message.attachments.first().url, // ส่ง URL ของรูปสลิปไปด้วยใน log
+          },
+          rdcw.data,
+        );
+
+        await message.reply(
+          "ได้รับรูปภาพแล้วครับ! กรุณารอแอดมินตรวจสอบสักครู่ 🙏",
+        );
       }
     }
-  }
 
-  if (message.content.startsWith("https://gift.truemoney.com/campaign/voucher_detail")) {
-    const res = await walletTopup(message.content);
-    if (!res.status) {
-      await message.reply(`รับซองไม่สำเร็จ: ${res.reason}`);
-      return;
+    // Wallet Top-up Link Handling
+    if (
+      message.content.startsWith(
+        "https://gift.truemoney.com/campaign/voucher_detail",
+      )
+    ) {
+      const res = await walletTopup(message.content);
+      if (!res.status) {
+        await message.reply(`รับซองไม่สำเร็จ: ${res.reason}`);
+        return;
+      }
+      await sendLogWalletEmbed(client, {
+        authorId: message.author.id,
+        channelId: message.channel.id,
+        channelName: message.channel.name,
+        authorTag: message.author.tag,
+        amount: String(res.amount) || "0", // กำหนดเป็นจำนวนเงินสูงๆ เพื่อให้เห็นใน log ว่ามีการรับซองไม่สำเร็จ
+        link: message.content,
+      });
+      await message.reply(
+        `รับซองสำเร็จ! จำนวนเงินที่ได้รับ: ${res.amount} บาท`,
+      );
     }
-    await sendLogWalletEmbed(client, {
-      authorId: message.author.id,
-      channelId: message.channel.id,
-      channelName: message.channel.name,
-      authorTag: message.author.tag,
-      amount: String(res.amount) || "0", // กำหนดเป็นจำนวนเงินสูงๆ เพื่อให้เห็นใน log ว่ามีการรับซองไม่สำเร็จ
-      link: message.content,
-    });
-    await message.reply(`รับซองสำเร็จ! จำนวนเงินที่ได้รับ: ${res.amount} บาท`);
   }
 });
 
