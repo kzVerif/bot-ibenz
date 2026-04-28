@@ -15,6 +15,7 @@ import { sendLogWalletEmbed } from "./wallet/msgwallet.js";
 import { decodeSlipQRCode } from "./bank/QrReader.js";
 import { checkSlipRdcw } from "./bank/rdcw.js";
 import { sendLogBankEmbed } from "./bank/msgBank.js";
+import { checkAndSaveSlip } from "./bank/isDupe.js";
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
