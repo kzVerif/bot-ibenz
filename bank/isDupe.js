@@ -11,7 +11,7 @@ export function checkAndSaveSlip(refId) {
   const db = JSON.parse(fs.readFileSync(SLIP_PATH, "utf8"));
 
   if (refId in db.ref) {
-    return { success: false, message: "`❌` `:` `สลิปซ้ำ`" };
+    return { success: false, message: "สลิปซ้ำ" };
   }
 
   db.ref[refId] = true;

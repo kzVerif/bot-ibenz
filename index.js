@@ -6,9 +6,12 @@ import {
   Events,
   GatewayIntentBits,
   EmbedBuilder,
-  ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
 } from "discord.js";
 import { walletTopup } from "./wallet/angpoa.js";
 import { sendLogWalletEmbed } from "./wallet/msgwallet.js";
@@ -16,6 +19,7 @@ import { decodeSlipQRCode } from "./bank/QrReader.js";
 import { checkSlipRdcw } from "./bank/rdcw.js";
 import { sendLogBankEmbed } from "./bank/msgBank.js";
 import { checkAndSaveSlip } from "./bank/isDupe.js";
+import { createreplyEmbed } from "./embed/reply.js";
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
@@ -40,6 +44,10 @@ const commands = [
         required: true,
       },
     ],
+  },
+  {
+    name: "wallet", // คุณอาจจะเปลี่ยนเป็น "pay" ในภายหลัง
+    description: "สร้าง Embed ชำระเงิน TrueMoney Wallet",
   },
 ];
 
@@ -68,6 +76,7 @@ client.on(Events.ClientReady, (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}!`);
 });
 
+// Slash Command Handling
 client.on(Events.InteractionCreate, async (interaction) => {
   // เช็คว่าเป็น Slash Command หรือไม่
   if (!interaction.isChatInputCommand()) return;
@@ -75,10 +84,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (interaction.commandName === "qr") {
     const member = interaction.member;
     if (!member.roles.cache.has(process.env.ADMIN_ROLE_ID)) {
-      await interaction.reply({
-        content: "คุณไม่มีสิทธิ์ในการใช้คำสั่งนี้",
-        ephemeral: true,
-      });
+      const embed = await createreplyEmbed(
+        "❌",
+        "คุณไม่มีสิทธิ์ในการใช้คำสั่งนี้",
+        false,
+      );
+      await interaction.reply({ embeds: [embed], flags: 64 });
       return;
     }
     // 1. ดึงค่า Parameters
@@ -116,8 +127,133 @@ client.on(Events.InteractionCreate, async (interaction) => {
       embeds: [paymentEmbed],
     });
   }
+
+  if (interaction.commandName === "wallet") {
+    const member = interaction.member;
+    if (!member.roles.cache.has("1498389644679577862")) {
+      const embed = await createreplyEmbed(
+        "❌",
+        "คุณไม่มีสิทธิ์ในการใช้คำสั่งนี้",
+        false,
+      );
+      await interaction.reply({ embeds: [embed], flags: 64 });
+      return;
+    }
+    const paymentEmbed = new EmbedBuilder()
+      .setColor(0x06c755)
+      .setTitle("🩷 Rakjang Store")
+      .setDescription(
+        [
+          "`ชำระเงินด้วย TrueMoney Wallet`",
+          "",
+          "`🧧` `:` `สร้างซองปั่งเปาแล้วกดปุ่มเพื่อส่งซอง`",
+          "`🟢` `:` `คลิ๊กที่ปุ่มเพื่อส่งซอง`",
+        ].join("\n"),
+      )
+      .setTimestamp()
+      .setFooter({
+        text: `${client.user.username} • ระบบชำระเงินอัตโนมัติ`,
+        iconURL: client.user.displayAvatarURL(),
+      });
+
+    const sendButton = new ButtonBuilder()
+      .setCustomId("send_wallet")
+      .setLabel("ส่งซองปั่งเปา")
+      .setStyle(ButtonStyle.Success)
+      .setEmoji("1455418305702793454");
+
+    const row = new ActionRowBuilder().addComponents(sendButton);
+
+    // 5. ส่งคำตอบกลับไป (reply)
+    await interaction.reply({
+      embeds: [paymentEmbed],
+      components: [row],
+    });
+  }
 });
 
+// Button Interaction Handling
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isButton()) return;
+  if (interaction.customId === "send_wallet") {
+    // await interaction.deferReply({ flags: 64 });
+    const walletModal = new ModalBuilder()
+      .setCustomId("wallet_modal")
+      .setTitle("ส่งซองปั่งเปา");
+
+    const url = new TextInputBuilder()
+      .setCustomId("wallet_url")
+      .setLabel("กรุณาใส่ลิงก์ซองปั่งเปา")
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder(
+        "https://gift.truemoney.com/campaign/voucher_detail?hash=xxxx",
+      )
+      .setRequired(true);
+
+    const row1 = new ActionRowBuilder().addComponents(url);
+
+    walletModal.addComponents(row1);
+    await interaction.showModal(walletModal);
+  }
+
+  if (interaction.customId.startsWith("notify_")) {
+    const channel = await interaction.guild.channels.cache.get(
+      interaction.customId.replace("notify_", ""),
+    );
+    const embed = await createreplyEmbed(
+      "✅",
+      "สลิปถูกต้อง ส่งไอดีพร้อมชื่อได้เลยคับ",
+      true,
+    );
+    await channel.send({ embeds: [embed] });
+    const embedEphemeral = await createreplyEmbed(
+      "✅",
+      `แจ้งเตือนผู้ใช้เรียบร้อยแล้ว กลับห้องคลิ้กที่นี่ <#${interaction.customId.replace("notify_", "")}> เพื่อดูรายละเอียดเพิ่มเติม`,
+      true,
+    );
+    await interaction.reply({
+      embeds: [embedEphemeral],
+      flags: 64,
+    });
+    return;
+  }
+});
+
+// Modal Submit Handling
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isModalSubmit()) return;
+
+  if (interaction.customId === "wallet_modal") {
+    const url = interaction.fields.getTextInputValue("wallet_url");
+    const res = await walletTopup(url);
+    if (!res.status) {
+      const embed = await createreplyEmbed(
+        "❌",
+        `รับซองไม่สำเร็จ: ${res.reason}`,
+        false,
+      );
+      await interaction.reply({ embeds: [embed], flags: 64 });
+      return;
+    }
+    await sendLogWalletEmbed(client, {
+      authorId: interaction.user.id,
+      channelId: interaction.channelId,
+      channelName: interaction.channel.name,
+      authorTag: interaction.user.tag,
+      amount: String(res.amount) || "0", // กำหนดเป็นจำนวนเงินสูงๆ เพื่อให้เห็นใน log ว่ามีการรับซองไม่สำเร็จ
+      link: interaction.fields.getTextInputValue("wallet_url"),
+    });
+    const embed = await createreplyEmbed(
+      "✅",
+      `รับซองสำเร็จ! จำนวนเงินที่ได้รับ: ${res.amount} บาท`,
+      true,
+    );
+    await interaction.reply({ embeds: [embed], flags: 64 });
+    return;
+  }
+});
+
+// ดัก Slip
 client.on(Events.MessageCreate, async (message) => {
   // 1. ป้องกันบอทตอบกันเอง
   if (message.author.bot) return;
@@ -143,7 +279,8 @@ client.on(Events.MessageCreate, async (message) => {
         const slipResult = checkAndSaveSlip(rdcw.data.transRef);
         if (!slipResult.success) {
           // ดำเนินการต่อหากสลิปใหม่
-          await message.reply(slipResult.message);
+          const embed = await createreplyEmbed("❌", slipResult.message, false);
+          await message.reply({ embeds: [embed] });
           return;
         }
 
@@ -163,35 +300,38 @@ client.on(Events.MessageCreate, async (message) => {
           rdcw.data,
         );
 
-        await message.reply(
-          "ได้รับรูปภาพแล้วครับ! กรุณารอแอดมินตรวจสอบสักครู่ 🙏",
+        const embed = await createreplyEmbed(
+          "✅",
+          `ได้รับรูปภาพแล้วครับ! กรุณารอแอดมินตรวจสอบสักครู่ 🙏 ไปที่ห้อง <#${process.env.LOG_CHANNEL_ID}> เพื่อดูรายละเอียดเพิ่มเติม`,
+          true,
         );
+        await message.reply({ embeds: [embed] });
       }
     }
 
     // Wallet Top-up Link Handling
-    if (
-      message.content.startsWith(
-        "https://gift.truemoney.com/campaign/voucher_detail",
-      )
-    ) {
-      const res = await walletTopup(message.content);
-      if (!res.status) {
-        await message.reply(`รับซองไม่สำเร็จ: ${res.reason}`);
-        return;
-      }
-      await sendLogWalletEmbed(client, {
-        authorId: message.author.id,
-        channelId: message.channel.id,
-        channelName: message.channel.name,
-        authorTag: message.author.tag,
-        amount: String(res.amount) || "0", // กำหนดเป็นจำนวนเงินสูงๆ เพื่อให้เห็นใน log ว่ามีการรับซองไม่สำเร็จ
-        link: message.content,
-      });
-      await message.reply(
-        `รับซองสำเร็จ! จำนวนเงินที่ได้รับ: ${res.amount} บาท`,
-      );
-    }
+    // if (
+    //   message.content.startsWith(
+    //     "https://gift.truemoney.com/campaign/voucher_detail",
+    //   )
+    // ) {
+    //   const res = await walletTopup(message.content);
+    //   if (!res.status) {
+    //     await message.reply(`รับซองไม่สำเร็จ: ${res.reason}`);
+    //     return;
+    //   }
+    //   await sendLogWalletEmbed(client, {
+    //     authorId: message.author.id,
+    //     channelId: message.channel.id,
+    //     channelName: message.channel.name,
+    //     authorTag: message.author.tag,
+    //     amount: String(res.amount) || "0", // กำหนดเป็นจำนวนเงินสูงๆ เพื่อให้เห็นใน log ว่ามีการรับซองไม่สำเร็จ
+    //     link: message.content,
+    //   });
+    //   await message.reply(
+    //     `รับซองสำเร็จ! จำนวนเงินที่ได้รับ: ${res.amount} บาท`,
+    //   );
+    // }
   }
 });
 
