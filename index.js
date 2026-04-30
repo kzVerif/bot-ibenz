@@ -200,6 +200,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const channel = await interaction.guild.channels.cache.get(
       interaction.customId.replace("notify_", ""),
     );
+      if (!channel) {
+    const embedError = await createreplyEmbed(
+      "❌",
+      "ห้องนี้ถูกปิดหรือลบไปแล้ว ไม่สามารถแจ้งเตือนได้",
+      true,
+    );
+    await interaction.reply({
+      embeds: [embedError],
+      flags: 64,
+    });
+    return;
+  }
+  
     const embed = await createreplyEmbed(
       "✅",
       "สลิปถูกต้อง ส่งไอดีพร้อมชื่อได้เลยคับ",
