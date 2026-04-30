@@ -204,7 +204,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const embedError = await createreplyEmbed(
       "❌",
       "ห้องนี้ถูกปิดหรือลบไปแล้ว ไม่สามารถแจ้งเตือนได้",
-      true,
+      false,
     );
     await interaction.reply({
       embeds: [embedError],
@@ -212,7 +212,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     });
     return;
   }
-  
+
     const embed = await createreplyEmbed(
       "✅",
       "สลิปถูกต้อง ส่งไอดีพร้อมชื่อได้เลยคับ",
