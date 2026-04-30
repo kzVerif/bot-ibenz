@@ -1,4 +1,4 @@
-import { EmbedBuilder } from "discord.js";
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, } from "discord.js";
 
 const CHANNEL_ID = process.env.LOG_CHANNEL_ID;
 
@@ -27,5 +27,13 @@ export async function sendLogWalletEmbed(client, messageData) {
       iconURL: client.user.displayAvatarURL(),
     });
 
-  await channel.send({ embeds: [logEmbed] });
+   const button = new ButtonBuilder()
+    .setCustomId(`notify_${messageData.channelId}`)
+    .setLabel("แจ้งเตือนผู้ใช้")
+    .setStyle(ButtonStyle.Success)
+    .setEmoji("1455418305702793454");
+
+  const row = new ActionRowBuilder().addComponents(button);
+
+  await channel.send({ embeds: [logEmbed], components: [row] });
 }
